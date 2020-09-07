@@ -1,0 +1,4 @@
+But using the Prometheus Operator framework and its Custom Resource Definitions has significant advantages over manually 
+adding metric targets and service providers  which can become cumbersome for large deployments 
+and doesn’t fully utilize Kubernetes’ orchestrator capabilities.
+

@@ -1,0 +1,78 @@
+7) How to monitor a Kubernetes service with Prometheus:
+Prometheus metrics are exposed by services through HTTP(S).
+There are several advantages to this approach
+    -> No need to install service agent, just to expose a web port. Prometheus servers will
+    regularly scrape.
+    -> Reuse internal webserver and just add a folder like /metrics, since several microservices already use HTTP for 
+    their regular functionality.
+    -> metrics format itself in human readable format.
+Some services are designed to export Prometheus Metrics from the ground-up.
+E.g. Kubernetes kubelet, Traefik web proxy, Istio microservice mesh, etc.
+Some are not, but for that, we use an exporter. An exporter is a service that collects service stats 
+and translates to prometheus metrics which are ready to be scrapted.
+
+-> Case 1: Microservice already offers a Prometheus endpoint.
+e.g. Traefik. It is commonly used as an Ingress Controller or Entrypoint, this is, the bridge between Internet 
+and the specific microservices inside your cluster.
+The snippet below deploys a simple Traefik with Prometheus support up and running quickly:
+'''
+kubectl create -f https://raw.githubusercontent.com/mateobur/prometheus-monitoring-guide/master/traefik-prom.yaml
+'''
+Now, when we check services, it should have these:
+'''
+kubectl get svc
+NAME                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                   AGE
+kubernetes                   ClusterIP   10.96.0.1       <none>        443/TCP                   238d
+prometheus-example-service   ClusterIP   10.103.108.86   <none>        9090/TCP                  5h
+traefik                      ClusterIP   10.108.71.155   <none>        80/TCP,443/TCP,8080/TCP   35s
+'''
+We can now check that Prometheus metrics are being exposed just by using curl:
+'''
+curl 10.108.71.155:8080/metrics
+# HELP go_gc_duration_seconds A summary of the GC invocation durations.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 2.4895e-05
+go_gc_duration_seconds{quantile="0.25"} 4.4988e-05
+...
+'''
+[Note that 10.108.71.155 is the cluster IP for traefik service. And it is using 8080 port.]
+
+Now, we need to add the new target to prometheus.yml (Config file!) conf file.
+Actually, when we checkout the file, we can see that Prometheus automatically scrapes itself:
+'''
+- job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['localhost:9090']
+'''
+Now, we can add another static endpoint as follows:
+'''
+  - job_name: 'traefik'
+    static_configs:
+    - targets: ['traefik:8080']
+'''
+This means that, our traefik:8080 is exposing metrics at the url traefik:8080/metrics.
+Now, if the service is in different namespace, we need to use FQDN i.e.
+traefik.default.svc.cluster.local
+
+Now, the above is the bare minimum configuration, the scrape config supports multiple parameters.
+Few of them are:
+    - basic_auth and bearer_token: If endpoints require authentication over HTTPs, using a classical 
+    login/password scheme or a bearer toekn in the request headers.
+    - kubernetes_sd_configs or consul_sd_configs: different endpoint autodiscovery
+    - scrape_interval, scrape_limit, scrape_timeout: Different tradeoffs between precision, resillience and system load.
+
+Patch the ConfigMap and Deployment:
+'''
+kubectl create configmap prometheus-example-cm --from-file=prometheus.yml -o yaml --dry-run | kubectl apply -f -
+
+kubectl patch deployment prometheus-deployment -p 
+  "{"spec":{"template":{"metadata":{"labels":{"date":"`date +'%s'`"}}}}}"
+'''
+
+Now, if we access /targets URL in Prometheus Web interface, we should see what endpoints are up.
+
+Using frontend, we can locate and extract some metrics.

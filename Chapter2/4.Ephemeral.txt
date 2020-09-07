@@ -1,0 +1,22 @@
+5) Prometheus Metrics for ephemeral jobs - Push Gateway
+Every one has con tasks for backup, cleanup, maintenance, etc
+We would like to collect metrics for these tasks, but target/scrap model of Prometheus will not work here.
+That's why Prometheus provides Pushgateway service: Push acceptor for ephemeral and batch jobs. 
+We can push metrics to pushgateway and it will retain the information so it can be scraped later.
+
+Deploying basic functional pushgateway:
+'''
+kubectl create -f prometheus-monitoring-guide/pushgateway/
+
+Forward the service port of your pushgateway pod:
+kubectl port-forward pushgateway-deployment-66478477fb-gmsld 9091:9091
+
+And try to post a metric using curl, which is basically what your batch jobs will do:
+echo "some_metric 3.14" | curl --data-binary @- http://localhost:9091/metrics/job/some_job
+
+Now, you can scrape this metric normally, even if the original source is no longer running:
+curl localhost:9091/metrics | grep some_metric
+# TYPE some_metric untyped
+some_metric{instance="",job="some_job"} 3.14
+'''
+

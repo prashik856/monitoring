@@ -1,0 +1,62 @@
+Prometheus Operator – How to configure Alert Rules
+We can configure Kubernetes monitoring alerts in our Prometheus deployments using a 
+concept that is very similar to the ServiceMonitor: the PrometheusRule CRD.
+
+When we were defining our Prometheus deployment there was a configuration block to filter and match these objects:
+
+  ruleSelector:
+    matchLabels:
+      prometheus: service-prometheus
+      role: alert-rules
+
+If you define an object containing the PromQL rules you desire and matching the desired metadata, 
+they will be automatically added to the Prometheus servers’ configuration 
+(you can find this file in the repository as shown below).
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: service-prometheus
+    role: alert-rules
+  name: prometheus-service-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: general.rules
+    rules:
+    - alert: TargetDown-serviceprom
+      annotations:
+        description: '{{ $value }}% of {{ $labels.job }} targets are down.'
+        summary: Targets are down
+      expr: 100 * (count(up == 0) BY (job) / count(up) BY (job)) > 10
+      for: 10m
+      labels:
+        severity: warning
+    - alert: DeadMansSwitch-serviceprom
+      annotations:
+        description: This is a DeadMansSwitch meant to ensure that the entire Alerting
+          pipeline is functional.
+        summary: Alerting DeadMansSwitch
+      expr: vector(1)
+      labels:
+        severity: none
+
+Apply from the repository:
+kubectl create -f prometheus-monitoring-guide/operator/prometheusrules.yaml
+
+You will be able to inspect these alerts right away from the service-prometheus interface. 
+Use a local port-forward if you don’t want to configure an external ingress:
+kubectl port-forward prometheus-service-prometheus-0 -n monitoring 9090:9090
+
+Access the Alerts tab in the Prometheus server interface:
+
+DeadManSwitch is a common name for an alert that will always fire (it has a firing condition that 
+always evaluates to true) and it’s there to check that your alerting pipeline is working as expected. 
+A few seconds after this condition is loaded you should see the alert name over a light red background (firing), 
+as in the image above.
+
+If you open the Alertmanager interface now (port 9093), you can see the alerts coming from this Prometheus deployment. 
+Use a local port-forward if you don’t want to configure an external ingress:
+
+kubectl port-forward alertmanager-main-0 -n monitoring 9093:9093

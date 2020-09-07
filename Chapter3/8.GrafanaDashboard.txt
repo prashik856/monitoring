@@ -1,0 +1,91 @@
+Prometheus Operator – Defining Grafana Dashboards:
+As of today, there is no custom resource definition for the Grafana component in the Prometheus Operator.
+ In order to manage Grafana configuration we will be using then Kubernetes secrets and ConfigMaps,
+  including new datasources and new dashboards.
+
+When using Grafana deployed using the Prometheus Operator, datasources are defined 
+as data structure encoded using base64 that Grafana reads from a Kubernetes secret.
+
+If you decode your current secret data, you should see something similar to this:
+
+kubectl get secret grafana-datasources -n monitoring -o jsonpath --template '{.data.prometheus.yaml}' | base64 -d
+{
+    "apiVersion": 1,
+    "datasources": [{
+        "access": "proxy",
+        "editable": false,
+        "name": "prometheus",
+        "orgId": 1,
+        "type": "prometheus",
+        "url": "http://prometheus-k8s.monitoring.svc:9090",
+        "version": 1
+    }]
+}
+
+We just need to append the new datasource using the same JSON format, re-encode the secret data as base64 and update the secret.
+Let’s create this new file:
+
+{
+    "apiVersion": 1,
+    "datasources": [
+        {
+            "access": "proxy",
+            "editable": false,
+            "name": "prometheus",
+            "orgId": 1,
+            "type": "prometheus",
+            "url": "http://prometheus-k8s.monitoring.svc:9090",
+            "version": 1
+        },
+        {
+            "access": "proxy",
+            "editable": false,
+            "name": "service-prometheus",
+            "orgId": 1,
+            "type": "prometheus",
+            "url": "http://service-prometheus.monitoring.svc:9090",
+            "version": 1
+        }
+    ]
+}
+
+Encapsulate it in a secret object (you can use your own file or the one from the repository as shown below):
+kubectl create secret generic grafana-datasources -n monitoring --from-file=./prometheus-monitoring-guide/operator/grafana/prometheus.yaml --dry-run -o yaml > grafana-datasources.yaml
+
+And patch the Grafana secret in the API:
+kubectl patch secret grafana-datasources -n monitoring --patch "$(cat grafana-datasources.yaml)"
+
+Note that the datasource points to a service, not the Prometheus pods, 
+you will have to create the service-prometheus.monitoring.svc service using this file:
+kubectl create -f prometheus-monitoring-guide/operator/prometheus-svc.yaml
+
+Finally, restart Grafana:
+kubectl delete pod grafana-5568b65944-szhx4 -n monitoring
+
+And go to the datasources tab in the UI (Use the port-forward again if necessary, port 3000), 
+you should see both Prometheus deployments as data sources:
+
+Using the Prometheus Operator, Grafana dashboard can be externally loaded just encoding the Dashboard JSON data inside a Kubernetes ConfigMap:
+kubectl get cm -n monitoring
+NAME                                        DATA      AGE
+grafana-dashboard-k8s-cluster-rsrc-use      1         20d
+grafana-dashboard-k8s-node-rsrc-use         1         20d
+grafana-dashboard-k8s-resources-cluster     1         20d
+grafana-dashboard-k8s-resources-namespace   1         20d
+grafana-dashboard-k8s-resources-pod         1         20d
+
+These ConfigMaps are explicitly mounted in the Grafana deployment definition:
+
+kubectl get deployments grafana -n monitoring -o yaml
+...
+        - mountPath: /grafana-dashboard-definitions/0/pods
+          name: grafana-dashboard-pods
+...
+      - configMap:
+          defaultMode: 420
+          name: grafana-dashboard-pods
+        name: grafana-dashboard-pods
+
+You can create a new ConfigMap per dashboard and add the corresponding entries in 
+the deployment definition that manages the Grafana pods.
+

@@ -1,0 +1,88 @@
+6) How to install Prometheus
+-> Directly as a single binary, which is fine for learning, testing and developing purposes.
+-> As a Docker container 
+    - Raw docker containers, Kubernetes Deployments/Statefulsets, Kubernetes Operators, etc.
+
+Automated deployments:
+Single binary -> Docker container -> Kubernetes Deployment -> Prometheus operator
+
+-> As a Single Binary
+We can directly download and run the Prometheus binary in our local machine/host:
+Download from : https://prometheus.io/download/
+'''
+prometheus-2.3.1.linux-amd64$ ./prometheus
+level=info ts=2018-06-21T11:26:21.472233744Z caller=main.go:222 msg="Starting Prometheus"
+'''
+Which is a nice way to get the first impression on proemtheus web interface.
+
+
+-> As a Docker Container
+Prometheus server inside a container:
+'''
+docker run -p 9090:9090 -v /tmp/prometheus.yml:/etc/prometheus/prometheus.yml 
+       prom/prometheus
+'''
+
+
+-> As a Kubernetes Deployment
+We can easily adapt this Docker container into a proper Kubernetes Deployment Object, that will mount 
+the configuration from a ConfigMap, expose a service, deploy multiple replicas, etc.
+'''
+kubectl create configmap prometheus-example-cm --from-file prometheus.yml
+'''
+
+A basic working Prometheus.yml config file can be found here:
+https://github.com/prometheus/prometheus/blob/master/docs/getting_started.md
+
+And then we can apply this example yaml file:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  labels:
+    app: prometheus
+    purpose: example
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prometheus
+      purpose: example
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        purpose: example
+    spec:
+      containers:
+      - name: prometheus-example
+        image: prom/prometheus
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/prometheus/prometheus.yml
+            subPath: prometheus.yml
+        ports:
+        - containerPort: 9090
+      volumes:
+        - name: config-volume
+          configMap:
+           name: prometheus-example-cm
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: prometheus-example-service
+spec:
+  selector:
+    app: prometheus
+    purpose: example
+  ports:
+  - name: promui
+    protocol: TCP
+    port: 9090
+    targetPort: 9090
+
+We can specify a ClusterIP (LoadBalancer/externalIP) if required.
+We can also apply pod affinity to force Prometheus servers to be in different nodes.
+Thus, using this, we can make sure that Prometheus is higly available across all ADs.
+

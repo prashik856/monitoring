@@ -1,0 +1,14 @@
+PROMETHEUS OPERATOR - COMPONENTS ARCHITECTURE DESIGN
+
+You can see that this diagram is similar to the one in part 2, 
+where we were installing Prometheus components manually. 
+There are, however, two important differences:
+
+1. Different Prometheus deployments will monitor different resources:
+    - One group of Prometheus servers (1 to N, depending on your scale) is going to monitor the Kubernetes internal component and state.
+    - Another group of Prometheus server is going to monitor any other app deployed in your cluster.
+2. Instead of directly creating Deployments and Services, we are going to use the CRDs to feed 
+  the Operator with metrics sources. In the example above we have one Grafana service with two data sources,
+   but we will show how to rearrange the component diagram in a declarative way thanks to the Prometheus Operator.
+
+

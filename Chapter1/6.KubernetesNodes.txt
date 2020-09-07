@@ -1,0 +1,79 @@
+10) Monitoring the Kubernetes nodes with Prometheus:
+We will be using node-exporter:
+    -> Its hosted by the Prometheus project itself
+    -> Is the one that will automatically deployed when we use the Prometheus opertor.
+    -> Can we deployed as DaemonSet, and will automatically scale if we add/remove nodes.
+
+E.g. using DaemonSet
+'''
+kubectl create ns monitoring 
+kubectl create -f https://raw.githubusercontent.com/bakins/minikube-prometheus-demo/master/node-exporter-daemonset.yml
+'''
+
+Or, we can use helm/Tiller:
+If we want to use helm, remember to create the RBAC roles and service accounts fot the tiller component before proceeding.
+'''
+helm init --service-account tiller
+helm install --name node-exporter stable/prometheus-node-exporter
+'''
+
+We can then checkout the service which is deployed:
+kubectl get svc 
+NAME                                     TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+node-exporter-prometheus-node-exporter   ClusterIP   10.101.57.207    <none>        9100/TCP   17m
+
+Now, we again need to add the scrape config for this newly added deployment, and then we will be able to see the metrics.
+'job' will be the value of the name of Daemonset.
+And 'scrape_config -> target' will be node-exporter-prometheus-node-exporter:9100/metrics (probably).
+
+
+11) Monitoring kube-state-metrics with Prometheus:
+We can deploy it using the following command:
+'''
+git clone https://github.com/kubernetes/kube-state-metrics.git
+kubectl apply -f kube-state-metrics/kubernetes/
+...
+kubectl get svc -n kube-system
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+kube-dns             ClusterIP   10.96.0.10       <none>        53/UDP,53/TCP       13h
+kube-state-metrics   ClusterIP   10.102.12.190    <none>        8080/TCP,8081/TCP   1h
+'''
+
+Again, we need to scrape that service (port 8080) in the Prometheus Config. We need to use fqdn (just use it anyways)
+'''
+  - job_name: 'kube-state-metrics'
+    static_configs:
+    - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
+'''
+
+
+12) Monitoring Kubernetes Internal Components with Prometheus
+Kubernetes components, such as etcd, kube-scheduler or kube-controller that can export 
+its internal performance metrics using Prometheus.
+Monitoring them is similar to monitoring any other Prometheus endpoint 
+Depending on the deployment method and configuration, the Kubernetes services amy be listening on the local host only.
+Now, we need to create a service that will point to kube-scheduler pod:
+'''
+kind: Service
+apiVersion: v1
+metadata:
+  name: scheduler-service
+  namespace: kube-system
+spec:
+  selector:
+    component: kube-scheduler
+  ports:
+  - name: scheduler
+    protocol: TCP
+    port: 10251
+    targetPort: 10251
+'''
+
+Now, we will be able to scrape the endpoint: scheduler-service.kube-system.svc.cluster.local:10251
+
+
+In the end, we have some 6 target endpoints, which are some apps, Kubernetes cluster endpoints
+and Prometheus itself.
+This configuration is still naive and not automated, but at least we have a running Prometheus infrastructure.
+
+Next, we will cover additional components that are typically deployed together with Prometheus Service.

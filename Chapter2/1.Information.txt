@@ -1,0 +1,57 @@
+Kubernetes Monitoring with Prometheus: AlertManager, Grafana, PushGateway
+Other than just Prometheus, we need many other supporting components including rules and alerts (AlertManager), a graphics 
+visualization layer (Grafana), long term metrics storage, as well as extra metrics adapter for the software
+that is not compatible out of the box.
+
+
+Prometheus monitoring stack - Architecture overview
+
+Now, 
+1. Prometheus Server - this has Persistent Volume Requests which get a Storage Class (Long term storage).
+This is where we store metrics (Persistent metrics storage).
+2. AlertManager: Prometheus Server fiers alerts to Alertmanager.
+                Alertmanager sends notifications to slack, mails, etc
+3. Grafana: Grafana uses prometheus servers as data source for visualization and Dashboards
+4. Pushgateway: Prometheus servers scrapers metrics from this PushGateWay. Other external services, Ephemeral and batch jobs
+pushes metrics to PushGateWay.
+
+
+> Prometheus servers: Core of the deployment. The Prometheus servers will push alerts to AlertManager components. 
+The AlertManager will classify, route and notify using different notification channels or receivers.
+> Configure Prometheus datasource for Grafana, presenting data visualizations and Dashboard via its web interface.
+> Using Kubernetes PersistentVolumes, we will configure long term metrics storage.
+> Also, Ephemeral maintenance tasks and its associated metrics. The Pushgateway will be in charge of storing them
+long enough to be collected by the Prometheus servers.
+
+
+
+1) AlertManager, Prometheus alerting for Kubernetes
+There are two parts to alerting with Prometheus:
+    -> Alert conditions are configured using PromQL, in the Prometheus servers
+    -> Alertmanager recieves the active alerts:
+        : Classifies and groups htem based on their metadata (labels), and optionally
+        mutes or notifies them using a receiver
+
+Structure of a Prometheus Alerting Rule:
+'''
+groups:
+- name: etcd
+  rules:
+  - alert: NoLeader
+    expr: etcd_server_has_leader{job="kube-etcd"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      k8s-component: etcd
+    annotations:
+      description: etcd member {{ $labels.instance }} has no leader
+      summary: etcd member has no leader
+'''
+> expr: key is Prometheus expression that will be periodially evaluated and will fire if true
+> Define a minimum evaluation time (for) to avoid alerting on temporary, self healing glitches.
+> Kubernetes labes are very important.
+
+Display the alerts that the Prometheus server has successfully loaded, directly on web interface (Status -> Rules):
+The ones that are firing right now (Alerts)
+
+Now, we have some alert conditions and alerts that we need to forward to AlertManager.

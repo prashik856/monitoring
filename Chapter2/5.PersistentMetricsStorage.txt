@@ -1,0 +1,57 @@
+Prometheus Persistent Metrics Storage:
+Any production ready deployment requires us to configure a persistent storage interface,
+that will be able to maintain historical metrics data and survive pod restarts.
+
+We use PersistentVolume for this.
+    : If we use our own hosts and don't have a storage provider yet, there are open source and 
+    CNCF - approved solutions like Rook.
+    https://github.com/rook/rook
+
+> We need to use Kubernetes StatefulSets rather than deployments, when we are using Persistent Volumes.
+'''
+kubectl delete -f prometheus-monitoring-guide/alertmanager-example/prometheus-example.yaml
+kubectl create -f prometheus-monitoring-guide/storage/prometheus-example.yaml
+'''
+
+Every pod will create its own PersistentVolume:
+'''
+kubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS    CLAIM                                                   STORAGECLASS   REASON    AGE
+pvc-b5a4aaa1-9584-11e8-97c9-42010a800278   50Gi       RWO            Delete           Bound     default/prometheus-metrics-db-prometheus-deployment-0   standard                 4h
+pvc-f4ee61e4-9584-11e8-97c9-42010a800278   50Gi       RWO            Delete           Bound     default/prometheus-metrics-db-prometheus-deployment-1   standard                 4h
+'''
+
+There are three key differences between deployments that we are using:
+The API object type:
+kind: StatefulSet
+
+The VolumeClaim defining the storage that should be created for each pod in the set:
+ volumeClaimTemplates:
+  - metadata:
+      name: prometheus-metrics-db
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 50Gi
+
+The Prometheus server parameters defining data directory and retention period:
+      containers:
+      - args:
+        - --storage.tsdb.path=/data
+        - --storage.tsdb.retention=400d
+
+On average, Prometheus uses only around 1-2 bytes per sample.
+Thus, to plan the capacity of a Prometheus server, you can use the rough formula:
+'''
+needed_disk_space = retention_time_seconds * ingested_samples_per_second * bytes_per_sample
+'''
+
+Prometheus server(s) can also regularly forward the metrics to a remote endpoint and only store the last 
+uncommited chunk of readings locally. 
+Some cloud-scale / multisite Prometheus solutions like Cortex or Thanos solutions 
+make use of this feature, we will cover them on the last chapter of this guide.
+
+Next, we will see how to use the Kubernetes version of Prometheus-operator, which enables
+faster deployment of a complete stack in a more automated, scalable and declarative way.

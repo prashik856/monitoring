@@ -1,0 +1,30 @@
+8. How to monitor Kubernetes services with Prometheus exporters
+Monitoring apps using Prometheus exporters
+
+When the application do not expose Prometheus metrics out of the box.
+In this case, we need to bundle a Prometheus exporter, an additional process that is able to 
+retrieve the state/logs/other metrics formats of the main service and expose this information as Prometheus metrics.
+In other words, Prometheus adapter.
+
+E.g. Redis server and Prometheus sidecar container:
+'''
+# Clone the repo if you don't have it already
+git clone git@github.com:mateobur/prometheus-monitoring-guide.git
+kubectl create -f prometheus-monitoring-guide/redis_prometheus_exporter.yaml
+'''
+
+Now, we have deployed redis, inside which 2 containers are running. 
+'''
+kubectl get pod redis-546f6c4c9c-lmf6z
+NAME                     READY     STATUS    RESTARTS   AGE
+redis-546f6c4c9c-lmf6z   2/2       Running   0          2m
+'''
+
+Now, to scrape these metrics, we need to update the Prometheus configuration and reload.
+'''
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
+'''
+
+This is what we do to obtain redis service metrics in prometheus format.

@@ -1,0 +1,77 @@
+Kubernetes monitoring with Prometheus.
+
+-> Deploy Prometheus server
+-> Metrics Exporters
+-> Setup kube-state-metrics
+-> Pull, scrape and collect metrics
+-> Configure alerts with Alertmanager
+-> Dashboards with Grafana
+
+1) Why use Prometheus for Kubernetes Monitoring?
+-> DevOps culture.
+-> Containers and kubernetes.
+
+2) Why Prometheus is the Right tool for Containerized Environments?
+-> Multi-dimentional data model: Based on key-value pair.
+-> Accessible format and protocols: Human redable format.
+We can check if the metrics are correctly exposed just by using our web browser.
+e.g. curl localhost:9090/metrics
+-> Service Discovery: Metrics are only pulled. Prometheus is only responsible
+for pulling the data, not actually pushing it.
+They are also configurable
+-> Modular and highly available components: 
+Metric collection, alerting, graphical visualization, etc, are performed
+by different composable services. All these services are designed to 
+support redundancy and sharding.
+
+3) How Prometheus compares to other Kubernetes monitoring tools
+-> Key-Value vs dot-separated dimensions: Other engines use this method.
+This can become cumbersome when trying to expose highly dimensional data.
+Flexible query-based aggregation becomes more difficult as well.
+If we have 10 servers, using key value, we can just say {http_code = "500" }. 
+Using dot-separated demensions, we will have a big number of independent metrics that we 
+need to aggregate using expressions.
+-> Event logging vs metrics recording: Prometheus is more suitable for metrics collection
+and has a more powerful query language to inspect them.
+-> Blackbox vs whitebox monitoring: 
+
+4) Th challenges of microservices and Kubernetes monitoring with Prometheus
+-> Monitoring containers: visibility
+To solve this problem, we use the Kubernetes API and kube-state-metrics (which natively uses prometheus metrics)
+solve part of this problem by exposing Kubernetes internal data such as number of desired/running replicas
+in a deployment, unschedulable nodes, etc.
+Prometheus is good fit for microservices because we just need to expose a metrics port.
+The service itself is already presenting a HTTP interface, and developer just needs to add additional path like /metrics
+In some cases, the service is not prepared to servce Prometheus metrics and we can't modify code to support it.
+In that case, we need to deploy Prometheus exported bundled with the service, often as a sidecar container of the same pod.
+
+-> Dynamic monitoring: changing and volatile infrastructure.
+Now a days, ephemeral entities (services) can start or stop reporting at any time. This was a problem for classical monitoring
+systems.
+Prometheus has autodiscover mechanisms to deal with this.
+    -> Consul: A tool for service discovery and configuration.
+    -> Kubernetes: Kubernetes SD configurations allow retrieving scrape targets from Kubernetes' REST API and 
+    always stay synchronized with the cluster state.
+    -> Prometheus Operator: To automatically generate monitoring target configurations based on familiar 
+    Kubernetes label queries.
+
+-> Monitoring new layers of Infrastructure: Kubernetes components
+Using label-based data model of Prometheus together with PromWL, we can easily adapt to different pods scattered around multiple
+nodes.
+
+
+5) Kubernetes monitoring with Prometheus: Architecture Overview
+Prometheus PULL -> From Kubernetes API (target autodiscover)
+                -> PULL Autodiscovered Microservices metrics (fluentd, redis, etc)
+                -> Pull information from Kubernetes nodes (kube state metrics, node exporters, kube components)
+Prometheus PUSH -> Metrics Alert to AlertManager (Then alertmanager can send alerts through slack or email.)
+Grafana Pulls Prometheus metrics for visualization.
+> Prometheus servers need as much target auto discovery as possible. To achieve this, we can use Consul, Prometheus Kubernetes 
+SD Plugin, The prometheus operator and its Custom Resource Definitions.
+> Prometheus to collect metrics related to Kubernetes services, nodes and orchestration status
+    - Node exporter, for classical host-related metrics, cpu, mem, network, etc
+    - Kube-state-metrics for orchestration and cluster level metrics: deployments, pods metrics, resource reservation, etc
+    - Kube-system metrics from internal components: kubelet, etcd, dns, scheduler, etc
+> Configure rules to trigger alerts using PromQL, alertmanager will be the charge of managing alert notifications, grouping,
+inhibition, etc
+> Grafana pulls metrics from any number of Prometheus servers.

@@ -1,0 +1,70 @@
+2) AlertManager:
+Like metrics endpoints, AlertManager services can also be autodetected using different methods:
+DNS discovery, Consul, etc...
+
+We can take advantage of a basic Kubernetes abstractiong: The service
+'''
+alerting:
+  alertmanagers:
+  - scheme: http
+    static_configs:
+    - targets:
+       - "alertmanager-service:9093"
+'''
+We need to add this configuration in our Prometheus Configuration File.
+From the POV of Prometheus server, this configuration is just a static name, 
+but kubernetes service can perform different HA/LoadBalancing forwardings under the hood.
+
+
+AlertManager basics:
+-> AlertManager groups the different alerts based on their labels and origin
+    : E.g. we can configure our routing tree so every alert with label k8s-cluster-component
+    gets mailed to the 'cluster-admin' mail adress.
+-> Using Inhibition rules, an alert or group of alerts can be inhibited if another alert is firing.
+For e.g. if a cluster is down and completely unreachable, and there is no point notifying the
+status of the individual micorservices it contains.
+-> Alerts can be forwarded to 'receivers', this is, notification gateways like email, PagerDuty, webhook, etc.
+A simple AlertManager config:
+'''
+global:
+  resolve_timeout: 5m
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'sysdig-test'
+receivers:
+  - name: 'sysdig-test'
+    webhook_configs:
+    - url: 'https://webhook.site/8ce276c4-40b5-4531-b4cf-5490d6ed83ae'
+'''
+
+
+3) Prometheus monitoring with AlertManager
+Apply these files:
+'''
+git clone git@github.com:mateobur/prometheus-monitoring-guide.git
+cd prometheus-monitoring-guide/alertmanager-example/
+kubectl create cm prometheus-example-cm --from-file prometheus.yml
+kubectl create cm prometheus-rules-general --from-file generalrules.yaml
+
+Now, access https://webhook.site/ and replace the random URL you will get in 
+the alertmanager.yml file, url: 'your url here' parameter, and then:
+
+kubectl create cm alertmanager-config --from-file alertmanager.yml
+kubectl create -f prometheus-example.yaml
+kubectl create -f alertmanager-deployment.yaml
+'''
+
+After deploying:
+'''
+kubectl get pods
+NAME                                       READY     STATUS    RESTARTS   AGE
+alertmanager-deployment-78944d4bfc-rk2sg   1/1       Running   0          27s
+prometheus-deployment-784594c89f-fjbd6     1/1       Running   0          32s
+prometheus-deployment-784594c89f-gpvzf     1/1       Running   0          32s
+'''
+
+For Notification Channels:
+Prometheus -> AlertManager -> Notification Channels

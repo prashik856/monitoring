@@ -1,0 +1,22 @@
+9. Monitoring Kubernetes cluster with Prometheus and kube-state-metrics
+Three aspects of cluster monitoring to consider are:
+    -> The Kubernetes hosts (nodes): Classical sysadmin metrics such as cpu, load, disk, memory, etc
+    -> Orchestration level metrics: Deployment state, resource requests, scheduling and api server latency, etc.
+    -> Internal Kube-system components: Detailed service metrics for the scheduler, controller manager, dns service, etc.
+
+Monitoring Kubernetes components on a Prometheus Stack
+-> Heapster: is a cluster-wide aggregator of monitoring and event data that runs as a pod in the cluster.
+Heapster is now deprecated, and its replacement is the metrics -server.
+
+-> cAdvisor: is an open source container resource usage and performance analysis agent. it is purposer-built for containers and
+supports Docker containers natively. In Kubernetes, cAdvisor runs as part of the Kubelet binary.
+
+-> Kube-state-metrics: a simple service that listens to the Kubernetes API server and generates metrics about the state of the 
+objects such as deployments, nodes and pods. This pod is just a metrics endpoint, other entity needs to scrape it
+and provide long term storage (e.g. Prometheus server (PVC))
+
+-> Metrics Server: Cluster wide aggregator of resource usage data. Again, the metrics server will only present the last datapoints
+nad it's not in charge of long ter storage.
+
+Thus, Kube-state metrics is focused on Orchestration metadata: deployment, pod, replica status, etc
+and Metrics-server is focused on implement the resource metrics API: Cpu, file descriptors, memory, request latencies, etc.

@@ -1,0 +1,35 @@
+4) Grafana, Kubernetes Monitoring with Prometheus - Dashboards
+Grafana Project - Agnostic Analytics and Monitoring Platform.
+Not affiliated with Prometheus. 
+
+We will configure Grafana using ConfigMaps.
+'''
+helm install --name mygrafana stable/grafana --set sidecar.datasources.enabled=true --set sidecar.dashboards.enabled=true --set sidecar.datasources.label=grafana_datasource --set sidecar.dashboards.label=grafana_dashboard
+'''
+
+Then, we can get admin password as follows:
+'''
+kubectl get secret --namespace default mygrafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+'''
+
+Then use portforward to use grafana ui:
+'''
+kubectl port-forward mygrafana-859c68577f-4h6zp 3000:3000
+'''
+
+The two Configurations are required in Grafana:
+> Data Sources, the Prometehus server in our case
+> The Dashboards to visualize.
+
+
+We should autoconfigure both from the config files:
+'''
+kubectl create -f prometheus-monitoring-guide/grafana/ 
+configmap “dashboard-k8s-capacity” created 
+configmap “sample-grafana-datasource” created
+'''
+
+Here again, we can use just one Prometheus URL to point to server Prometheus nodes.
+'''
+url: http://prometheus-example-service:9090
+'''

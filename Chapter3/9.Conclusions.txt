@@ -1,0 +1,19 @@
+CONCLUSION:
+
+Using the Prometheus Operator we have managed to build the Kubernetes monitoring stack with less effort, 
+in a more declarative and reproducible way, which is also easier to scale, modify or migrate to a different set of hosts.
+
+So far we have been talking about the features, advantages and compelling possibilities of monitoring a Kubernetes cluster
+ using the Prometheus technology stack. 
+ Before committing to a large deployment though, you also need to be aware of its shortcomings or caveats, for example:
+
+    - Long term storage: As we have mentioned before, Prometheus abstracts away the long term metrics storage 
+        (and closely related concerns like backup, data redundancy, trend analysis, data mining). 
+        Part 2 of this guide describes a minimal Rook deployment that will provide the basic building blocks 
+        of a complete storage solution.
+    - Authorization and Authentication: As pointed out in the project documentation, Prometheus and its 
+        components do not provide any server-side authentication, authorization or encryption. 
+        No groups of users with different levels of access or any other RBAC framework.
+    - Vertical and Horizontal scalability: Not so much of a drawback but rather an aspect that you need 
+        to plan in advance to make informed decisions about your target capacity. 
+        We will cover Prometheus performance considerations, high availability and federation in the last part of this guide.

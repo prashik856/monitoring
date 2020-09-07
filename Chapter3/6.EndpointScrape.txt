@@ -1,0 +1,126 @@
+Prometheus Operator endpoint to scrape autoconfiguration:
+
+Next step is to build upon this configuration to start monitoring any other services deployed in your cluster.
+There are two custom resources involved in this process:
+
+1.The Prometheus CRD
+    - Defines Prometheus server pod metadata
+    - Defines # of Prometheus server replicas
+    - Defines Alertmanager(s) endpoint to send triggered alert rules
+    - Defines labels and namespace filters for the ServiceMonitor CRDs that will be applied by this Prometheus server deployment
+    - The ServiceMonitor objects will provide the dynamic target endpoint configuration
+2.The ServiceMonitor CRD
+    - Filters endpoints by namespace, labels, etc
+    - Defines the different scraping ports
+    - Defines all the additional scraping parameters like scraping interval, protocol to use, TLS credentials, re-labeling policies, etc.
+
+The Prometheus object filters and selects N ServiceMonitor objects, 
+which in turn, filter and select N Prometheus metrics endpoints.
+
+If there is a new metrics endpoint that matches the ServiceMonitor criteria, 
+this target will be automatically added to all the Prometheus servers that select that ServiceMonitor.
+
+As you can see in the diagram above, the ServiceMonitor targets Kubernetes services, 
+not the endpoints directly exposed by the pod(s).
+We already have a Prometheus deployment monitoring all the Kubernetes 
+internal metrics (kube-state-metrics, node-exporter, Kubernetes API, etc) 
+but now we need a separate deployment to take care of any other application running on top of the cluster.
+
+In order to do this new deployment, first let’s take a look at this Prometheus CRD before 
+applying it to the cluster (you can find this file in the repository as shown below):
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  labels:
+    app: prometheus
+    prometheus: service-prometheus
+  name: service-prometheus
+  namespace: monitoring
+spec:
+  alerting:
+    alertmanagers:
+    - name: alertmanager-main
+      namespace: monitoring
+      port: web
+  baseImage: quay.io/prometheus/prometheus
+  logLevel: info
+  paused: false
+  replicas: 2
+  retention: 2d
+  routePrefix: /
+  ruleSelector:
+    matchLabels:
+      prometheus: service-prometheus
+      role: alert-rules
+  serviceAccountName: prometheus-k8s
+  serviceMonitorSelector:
+    matchExpressions:
+    - key: serviceapp
+      operator: Exists
+
+For the sake of brevity, we will reuse the alertmanager and serviceAccount configuration found in the other deployment.
+
+In this Prometheus server configuration file we can find:
+    - The number of Prometheus replicas using this config (2)
+    - The ruleSelector that will dynamically configure alerting rules
+    - The Alertmanager deployment (could be more than one pod for redundancy) that will receive the triggered alerts
+    - The ServiceMonitorSelector, this is, the filter that will decide if a given serviceMonitor will be used to configure 
+      this Prometheus server.
+        -- For this example we have decided that a serviceMonitor will be associated with this Prometheus deployment 
+            if it contains the label serviceapp in its metadata.
+
+Once tuned to our needs, we can apply the new configuration directly from the repository:
+kubectl create -f prometheus-monitoring-guide/operator/service-prometheus.yaml
+
+Here the Prometheus Operator will notice the new API object and create the desired deployment for you:
+prometheus-service-prometheus-0       3/3       Running   1          12m
+prometheus-service-prometheus-1       3/3       Running   1          12m
+
+If you connect to the interface of any of these pods, 
+you will notice that we don’t have any metrics target yet. 
+We need a service to scrape. 
+If you have something installed already and want to use it, great!. 
+Otherwise, we can quickly get an app running using Helm.
+
+CoreDNS is a fast and flexible DNS server, an incubating-level project of 
+the Cloud Native Computing Foundation. 
+So if you have helm setup with your cluster, just run:
+kubectl create ns coredns
+helm install --name coredns --namespace=coredns stable/coredns
+
+CoreDNS exposes Prometheus metrics out of the box (using port 9153):
+
+kubectl get svc -n coredns
+NAME              TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)                  AGE
+coredns-coredns   ClusterIP   10.11.253.94   <none>        53/UDP,53/TCP,9153/TCP   3m
+
+Now, you can connect this new service with your Services Prometheus deployment using a ServiceMonitor 
+(you can find this file in the repository as shown below):
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    serviceapp: coredns-servicemonitor
+  name: coredns-servicemonitor
+  namespace: monitoring
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    interval: 15s
+    port: metrics
+  namespaceSelector:
+    matchNames:
+    - coredns
+  selector:
+    matchLabels:
+      release: coredns
+
+Apply it to your cluster:
+kubectl create -f prometheus-monitoring-guide/operator/servicemonitor-coredns.yaml
+After a few seconds, if you look at the scraping targets inside the Prometheus interface, 
+you will see how the configuration has been automatically updated and you are receiving metrics from this target:
+
+Now, if we increase the number of serving pods (and thus, metrics endpoints) for this CoreDNS deployment:
+helm upgrade coredns stable/coredns --set replicaCount=3
+
+Every target is automatically detected by the ServiceMonitor and registered in your Prometheus configuration:

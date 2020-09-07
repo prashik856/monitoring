@@ -1,0 +1,30 @@
+PROMETHEUS OPERATOR:
+The Prometheus Operator for Kubernetes provides easy monitoring definitions 
+for Kubernetes services and deployment and management of Prometheus instances.
+
+We are going to use the Prometheus Operator to:
+- Perform the initial installation and configuration of the full Kubernetes-Prometheus stack
+    Prometheus servers
+    Alertmanager
+    Grafana
+    Host node_exporter
+    kube-state-metrics
+- Define metric endpoint autoconfiguration using the ServiceMonitor entities
+- Customize and scale the services using the Operator CRDs and ConfigMaps, making our configuration fully portable and declarative
+
+The Operator acts on the following custom resource definitions (CRDs):
+- Prometheus, which defines the desired Prometheus deployment. 
+The Operator ensures at all times that a deployment matching the resource definition is running.
+- ServiceMonitor, which declaratively specifies how groups of services should be monitored. 
+The Operator automatically generates Prometheus scrape configuration based on the definition.
+- PrometheusRule, which defines a desired Prometheus rule file, which can be loaded by a Prometheus 
+instance containing Prometheus alerting and recording rules.
+- Alertmanager, which defines a desired Alertmanager deployment. 
+The Operator ensures at all times that a deployment matching the resource definition is running.
+
+Kube-prometheus repo - https://github.com/prometheus-operator/prometheus-operator/tree/master/contrib/kube-prometheus
+The kube-prometheus directory inside the Operator repository contains default services and configurations,
+ so you get not only the Prometheus Operator itself, but a complete setup that you can 
+ start using and customizing from the get-go.
+
+
